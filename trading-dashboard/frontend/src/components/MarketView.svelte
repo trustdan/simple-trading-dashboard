@@ -35,10 +35,14 @@
 		loading = true;
 		try {
 			await marketStore.loadLatestRating();
-			toast.info('Market sentiment loaded');
+			// Only show success toast if we have real data, not just defaults
+			console.log('Market sentiment loading completed');
 		} catch (error) {
 			console.error('Failed to load latest rating:', error);
-			toast.error('Failed to load market data');
+			// Only show error toast for actual errors, not default fallbacks
+			if (!error.message.includes('timeout')) {
+				toast.error('Failed to load market data');
+			}
 		} finally {
 			loading = false;
 		}

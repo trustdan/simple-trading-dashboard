@@ -14,6 +14,12 @@
 	let contextMenuX = 0;
 	let contextMenuY = 0;
 	let contextMenuTrade = null;
+	
+	// Tooltip state
+	let tooltipVisible = false;
+	let tooltipX = 0;
+	let tooltipY = 0;
+	let tooltipTrade = null;
 
 	// Group trades by strategy type for visual stacking
 	$: groupedTrades = groupTradesByStrategy(trades);
@@ -126,6 +132,145 @@
 	function handleContextMenuDuplicate(event) {
 		dispatch('duplicate-trade', event.detail);
 	}
+	
+	// Tooltip functions using immediate DOM manipulation
+	function showTooltip(trade, event) {
+		// Clean up any existing tooltip first
+		const existingTooltip = document.querySelector('.trade-tooltip-overlay');
+		if (existingTooltip) {
+			existingTooltip.remove();
+		}
+		
+		// Calculate position with screen boundaries in mind
+		const tooltipWidth = 280;
+		const tooltipHeight = 250;
+		const padding = 15;
+		
+		let x = Number(event.clientX) + padding;
+		let y = Number(event.clientY) - padding;
+		
+		// Check right edge
+		if (x + tooltipWidth > window.innerWidth) {
+			x = Number(event.clientX) - tooltipWidth - padding;
+		}
+		
+		// Check bottom edge  
+		if (y + tooltipHeight > window.innerHeight) {
+			y = Number(event.clientY) - tooltipHeight + padding;
+		}
+		
+		// Check top edge
+		if (y < 0) {
+			y = padding;
+		}
+		
+		// Check left edge
+		if (x < 0) {
+			x = padding;
+		}
+		
+		// Create tooltip immediately
+		const tooltip = document.createElement('div');
+		tooltip.className = 'trade-tooltip-overlay';
+		tooltip.style.cssText = `
+			position: fixed !important;
+			left: ${x}px !important;
+			top: ${y}px !important;
+			z-index: 2147483647 !important;
+			background: rgba(15, 15, 15, 0.98) !important;
+			border: 2px solid #4a90e2 !important;
+			border-radius: 12px !important;
+			padding: 16px !important;
+			color: #ffffff !important;
+			font-size: 0.9rem !important;
+			font-family: system-ui, -apple-system, sans-serif !important;
+			box-shadow: 0 12px 48px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.1) !important;
+			max-width: 280px !important;
+			min-width: 250px !important;
+			pointer-events: none !important;
+			backdrop-filter: blur(20px) !important;
+			transform: translateZ(0) !important;
+			will-change: transform !important;
+		`;
+		
+		tooltip.innerHTML = `
+			<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.2);">
+				<span style="font-weight: 700; font-size: 1.2rem; color: #4a90e2; font-family: monospace;">${trade.ticker}</span>
+				<span style="padding: 3px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; ${getStatusStyle(trade.status)}">${trade.status}</span>
+			</div>
+			<div style="font-weight: 600; color: #7b68ee; margin-bottom: 8px; font-size: 1rem;">${trade.strategy_type}</div>
+			<div style="color: #cccccc; font-size: 0.85rem; margin-bottom: 10px;">${trade.sector}</div>
+			<div style="margin-bottom: 10px;">
+				<div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+					<span style="color: #aaaaaa; font-size: 0.8rem;">Entry:</span> 
+					<span style="color: #ffffff;">${formatDate(trade.entry_date)}</span>
+				</div>
+				<div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+					<span style="color: #aaaaaa; font-size: 0.8rem;">Expiry:</span> 
+					<span style="color: #ffffff;">${formatDate(trade.expiration_date)}</span>
+				</div>
+			</div>
+			${trade.target_price || trade.stop_loss ? `
+				<div style="margin-bottom: 10px;">
+					${trade.target_price ? `
+						<div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+							<span style="color: #aaaaaa; font-size: 0.8rem;">Target:</span> 
+							<span style="color: #22c55e; font-weight: 600;">${formatCurrency(trade.target_price)}</span>
+						</div>
+					` : ''}
+					${trade.stop_loss ? `
+						<div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+							<span style="color: #aaaaaa; font-size: 0.8rem;">Stop:</span> 
+							<span style="color: #ef4444; font-weight: 600;">${formatCurrency(trade.stop_loss)}</span>
+						</div>
+					` : ''}
+				</div>
+			` : ''}
+			${trade.notes ? `<div style="background: rgba(255, 255, 255, 0.08); padding: 8px; border-radius: 6px; font-size: 0.8rem; color: #cccccc; margin-bottom: 10px; font-style: italic; border-left: 3px solid #4a90e2;">${trade.notes}</div>` : ''}
+			<div style="text-align: center; color: #888888; font-size: 0.75rem; border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 8px; font-style: italic;">💡 Click to edit</div>
+		`;
+		
+		document.body.appendChild(tooltip);
+		
+		// Store reference for cleanup
+		tooltipTrade = trade;
+		tooltipVisible = true;
+	}
+	
+	function hideTooltip() {
+		tooltipVisible = false;
+		tooltipTrade = null;
+		
+		// Clean up tooltip
+		const existingTooltip = document.querySelector('.trade-tooltip-overlay');
+		if (existingTooltip) {
+			existingTooltip.remove();
+		}
+	}
+	
+	function getStatusStyle(status) {
+		switch(status) {
+			case 'active':
+				return 'background: rgba(34, 197, 94, 0.2); color: #22c55e; border: 1px solid #22c55e;';
+			case 'closed':
+				return 'background: rgba(156, 163, 175, 0.2); color: #9ca3af; border: 1px solid #9ca3af;';
+			case 'expired':
+				return 'background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444;';
+			default:
+				return 'background: rgba(156, 163, 175, 0.2); color: #9ca3af; border: 1px solid #9ca3af;';
+		}
+	}
+	
+	function formatCurrency(value) {
+		return value ? `$${value.toFixed(2)}` : '-';
+	}
+	
+	function formatDate(dateString) {
+		return new Date(dateString).toLocaleDateString('en-US', {
+			month: 'short',
+			day: 'numeric'
+		});
+	}
 </script>
 
 <div 
@@ -153,7 +298,8 @@
 							style="background-color: {getStrategyColor(trade.strategy_type)}; border-color: {getStrategyColor(trade.strategy_type)}; opacity: {trade.status === 'active' ? 1 : 0.6};"
 							on:click={(e) => handleTradeClick(trade, e)}
 							on:contextmenu={(e) => handleRightClick(trade, e)}
-							title="{trade.ticker} - {trade.strategy_type} ({trade.status}) - Right-click for options"
+							on:mouseenter={(e) => showTooltip(trade, e)}
+							on:mouseleave={hideTooltip}
 						>
 							<div class="trade-header">
 								<div class="trade-ticker">
@@ -355,4 +501,21 @@
 			font-size: 0.6rem;
 		}
 	}
-</style> 
+	
+
+</style>
+
+
+
+<!-- Context Menu -->
+<TradeContextMenu 
+	bind:visible={contextMenuVisible}
+	trade={contextMenuTrade}
+	x={contextMenuX}
+	y={contextMenuY}
+	on:close={closeContextMenu}
+	on:edit={handleContextMenuEdit}
+	on:status-change={handleContextMenuStatusChange}
+	on:delete={handleContextMenuDelete}
+	on:duplicate={handleContextMenuDuplicate}
+/> 

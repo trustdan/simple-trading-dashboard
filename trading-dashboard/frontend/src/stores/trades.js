@@ -40,8 +40,16 @@ function createTradesStore() {
 			update(state => ({ ...state, loading: true }));
 			
 			try {
-				// Call the Wails backend API
-				const trades = await window.go.main.App.GetActiveTradesByDateRange(startDate, endDate);
+				// Add a timeout to prevent infinite loading
+				const timeoutPromise = new Promise((_, reject) => 
+					setTimeout(() => reject(new Error('Request timeout')), 10000)
+				);
+				
+				// Call the Wails backend API with timeout
+				const trades = await Promise.race([
+					window.go.main.App.GetActiveTradesByDateRange(startDate, endDate),
+					timeoutPromise
+				]);
 				
 				update(state => ({
 					...state,
@@ -49,10 +57,15 @@ function createTradesStore() {
 					loading: false
 				}));
 				
+				console.log(`Loaded ${trades?.length || 0} trades for date range`);
 				return trades;
 			} catch (error) {
 				console.error('Failed to load trades:', error);
-				update(state => ({ ...state, loading: false }));
+				update(state => ({ 
+					...state, 
+					trades: [],
+					loading: false 
+				}));
 				throw error;
 			}
 		},
@@ -60,16 +73,30 @@ function createTradesStore() {
 		// Load all strategy types
 		loadStrategyTypes: async () => {
 			try {
-				const strategies = await window.go.main.App.GetStrategyTypes();
+				// Add a timeout to prevent infinite loading
+				const timeoutPromise = new Promise((_, reject) => 
+					setTimeout(() => reject(new Error('Request timeout')), 10000)
+				);
+				
+				// Call the Wails backend API with timeout
+				const strategies = await Promise.race([
+					window.go.main.App.GetStrategyTypes(),
+					timeoutPromise
+				]);
 				
 				update(state => ({
 					...state,
 					strategyTypes: strategies || []
 				}));
 				
+				console.log(`Loaded ${strategies?.length || 0} strategy types`);
 				return strategies;
 			} catch (error) {
 				console.error('Failed to load strategy types:', error);
+				update(state => ({
+					...state,
+					strategyTypes: []
+				}));
 				throw error;
 			}
 		},

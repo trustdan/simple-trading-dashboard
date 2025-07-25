@@ -26,24 +26,40 @@ func NewApp() *App {
 	return &App{}
 }
 
-// getAppDataDir returns the appropriate app data directory for the current OS
-func getAppDataDir() (string, error) {
-	var baseDir string
+// getConsistentDataDir returns a consistent data directory that works for both standalone and installed versions
+func getConsistentDataDir() (string, error) {
+	// Strategy 1: Try to use the executable's directory (works for portable/standalone)
+	if exePath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exePath)
+		dataDir := filepath.Join(exeDir, "data")
 
-	// Check for Windows AppData
-	if appData := os.Getenv("APPDATA"); appData != "" {
-		baseDir = appData
-	} else {
-		// Fallback to user home directory
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("failed to get user home directory: %w", err)
+		// Test if we can write to this directory
+		testFile := filepath.Join(dataDir, ".write_test")
+		if err := os.MkdirAll(dataDir, 0755); err == nil {
+			if file, err := os.Create(testFile); err == nil {
+				file.Close()
+				os.Remove(testFile)
+				log.Printf("Using executable directory for data: %s", dataDir)
+				return dataDir, nil
+			}
 		}
-		baseDir = homeDir
 	}
 
-	appDir := filepath.Join(baseDir, "TradingDashboard")
-	return appDir, nil
+	// Strategy 2: Use Windows AppData (works for installed versions)
+	if appData := os.Getenv("APPDATA"); appData != "" {
+		appDir := filepath.Join(appData, "TradingDashboard")
+		log.Printf("Using AppData directory for data: %s", appDir)
+		return appDir, nil
+	}
+
+	// Strategy 3: Use user home directory
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		appDir := filepath.Join(homeDir, "TradingDashboard")
+		log.Printf("Using home directory for data: %s", appDir)
+		return appDir, nil
+	}
+
+	return "", fmt.Errorf("unable to determine suitable data directory")
 }
 
 // startup is called when the app starts. The context is saved
@@ -51,25 +67,53 @@ func getAppDataDir() (string, error) {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
-	// Get app data directory
-	appDataDir, err := getAppDataDir()
+	// Get a consistent data directory that works for both standalone and installed versions
+	dataDir, err := getConsistentDataDir()
 	if err != nil {
-		log.Printf("Warning: Failed to get app data directory, using current directory: %v", err)
-		appDataDir = "."
+		log.Printf("Warning: Failed to get data directory: %v", err)
+		// Fallback to current working directory
+		if cwd, err := os.Getwd(); err == nil {
+			dataDir = filepath.Join(cwd, "data")
+		} else {
+			dataDir = "data"
+		}
+	}
+	log.Printf("Using data directory: %s", dataDir)
+
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		log.Printf("Warning: Failed to create data directory at %s: %v", dataDir, err)
+		// Try fallback directory
+		if cwd, err := os.Getwd(); err == nil {
+			dataDir = cwd
+		} else {
+			dataDir = "."
+		}
 	}
 
 	// Initialize database
-	dbPath := filepath.Join(appDataDir, "trading_dashboard.db")
+	dbPath := filepath.Join(dataDir, "trading_dashboard.db")
 	log.Printf("Initializing database at: %s", dbPath)
 
 	db, err := database.NewDB(dbPath)
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		log.Printf("Failed to initialize database: %v", err)
+		// Still try to initialize services with nil database for graceful failure
+		a.db = nil
+		a.marketService = nil
+		a.tradeService = nil
+		return
 	}
 
-	// Initialize schema
+	// Initialize schema with better error handling
+	log.Println("Initializing database schema...")
 	if err := db.InitSchema(); err != nil {
-		log.Fatalf("Failed to initialize schema: %v", err)
+		log.Printf("Failed to initialize schema: %v", err)
+		// Close the database and set services to nil
+		db.Close()
+		a.db = nil
+		a.marketService = nil
+		a.tradeService = nil
+		return
 	}
 
 	a.db = db
@@ -86,11 +130,25 @@ func (a *App) Greet(name string) string {
 
 // SaveMarketRating saves a new market rating with sector ratings
 func (a *App) SaveMarketRating(req models.MarketRatingRequest) (*models.MarketRating, error) {
+	if a.marketService == nil {
+		return nil, fmt.Errorf("market service not available - database connection failed")
+	}
 	return a.marketService.SaveRating(req)
 }
 
 // GetLatestMarketRating retrieves the most recent market rating
 func (a *App) GetLatestMarketRating() (*models.MarketRating, error) {
+	if a.marketService == nil {
+		log.Printf("Market service not initialized - database connection failed")
+		// Return a default rating instead of failing
+		return &models.MarketRating{
+			ID:            0,
+			OverallRating: 0,
+			SectorRatings: make(map[string]float64),
+			CreatedAt:     time.Now(),
+			UpdatedAt:     time.Now(),
+		}, nil
+	}
 	return a.marketService.GetLatestRating()
 }
 
@@ -115,6 +173,9 @@ func (a *App) Close() {
 
 // CreateTrade creates a new options trade
 func (a *App) CreateTrade(req models.TradeRequest) (*models.OptionsTrade, error) {
+	if a.tradeService == nil {
+		return nil, fmt.Errorf("trade service not available - database connection failed")
+	}
 	return a.tradeService.CreateTrade(req)
 }
 
@@ -125,11 +186,21 @@ func (a *App) GetTradeByID(id int64) (*models.OptionsTrade, error) {
 
 // GetTrades retrieves trades within a date range
 func (a *App) GetTrades(startDate, endDate time.Time) ([]models.OptionsTrade, error) {
+	if a.tradeService == nil {
+		log.Printf("Trade service not initialized - database connection failed")
+		// Return empty list instead of failing
+		return []models.OptionsTrade{}, nil
+	}
 	return a.tradeService.GetTrades(startDate, endDate)
 }
 
 // GetActiveTradesByDateRange retrieves active trades for calendar view
 func (a *App) GetActiveTradesByDateRange(startDate, endDate time.Time) ([]models.OptionsTrade, error) {
+	if a.tradeService == nil {
+		log.Printf("Trade service not initialized - database connection failed")
+		// Return empty list instead of failing
+		return []models.OptionsTrade{}, nil
+	}
 	return a.tradeService.GetActiveTradesByDateRange(startDate, endDate)
 }
 
@@ -150,5 +221,10 @@ func (a *App) DeleteTrade(id int64) error {
 
 // GetStrategyTypes retrieves all available strategy types
 func (a *App) GetStrategyTypes() ([]models.StrategyType, error) {
+	if a.tradeService == nil {
+		log.Printf("Trade service not initialized - database connection failed")
+		// Return empty list instead of failing
+		return []models.StrategyType{}, nil
+	}
 	return a.tradeService.GetStrategyTypes()
 }

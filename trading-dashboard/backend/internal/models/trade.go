@@ -51,9 +51,14 @@ const (
 
 // StrategyCategory represents strategy categories
 const (
-	CategoryBullish = "Bullish"
-	CategoryBearish = "Bearish"
-	CategoryNeutral = "Neutral"
+	CategoryBasic           = "Basic"
+	CategoryIncome          = "Income"
+	CategoryCreditSpreads   = "Credit Spreads"
+	CategoryNeutral         = "Neutral"
+	CategoryCalendarSpreads = "Calendar Spreads"
+	CategoryDebitSpreads    = "Debit Spreads"
+	CategoryDirectional     = "Directional"
+	CategoryRatioSpreads    = "Ratio Spreads"
 )
 
 // ValidateTradeRequest validates a trade request
@@ -86,5 +91,14 @@ func GetValidStatuses() []string {
 
 // GetValidCategories returns all valid strategy categories
 func GetValidCategories() []string {
-	return []string{CategoryBullish, CategoryBearish, CategoryNeutral}
+	return []string{
+		CategoryBasic,
+		CategoryIncome,
+		CategoryCreditSpreads,
+		CategoryNeutral,
+		CategoryCalendarSpreads,
+		CategoryDebitSpreads,
+		CategoryDirectional,
+		CategoryRatioSpreads,
+	}
 }

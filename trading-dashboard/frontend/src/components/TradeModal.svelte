@@ -39,25 +39,51 @@
 	onMount(async () => {
 		try {
 			strategyTypes = await tradesStore.loadStrategyTypes();
-			
-			// If editing, populate form with trade data
-			if (trade && typeof trade === 'object') {
-				formData = {
-					ticker: trade.ticker || '',
-					sector: trade.sector || 'Technology',
-					strategy_type: trade.strategy_type || 'Long Call',
-					entry_date: trade.entry_date ? trade.entry_date.split('T')[0] : '',
-					expiration_date: trade.expiration_date ? trade.expiration_date.split('T')[0] : '',
-					target_price: trade.target_price || '',
-					stop_loss: trade.stop_loss || '',
-					notes: trade.notes || ''
-				};
-			}
+			populateFormFromTrade();
 		} catch (error) {
 			toastStore.error('Failed to load strategy types');
 			console.error('Error loading strategy types:', error);
 		}
 	});
+	
+	// Watch for changes to trade prop and update form
+	$: if (trade) {
+		populateFormFromTrade();
+	}
+	
+	// Reset form when modal opens for new trade
+	$: if (isOpen && !trade) {
+		resetForm();
+	}
+	
+	function populateFormFromTrade() {
+		if (trade && typeof trade === 'object') {
+			formData = {
+				ticker: trade.ticker || '',
+				sector: trade.sector || 'Technology',
+				strategy_type: trade.strategy_type || 'Long Call',
+				entry_date: trade.entry_date ? trade.entry_date.split('T')[0] : '',
+				expiration_date: trade.expiration_date ? trade.expiration_date.split('T')[0] : '',
+				target_price: trade.target_price || '',
+				stop_loss: trade.stop_loss || '',
+				notes: trade.notes || ''
+			};
+		}
+	}
+	
+	function resetForm() {
+		formData = {
+			ticker: '',
+			sector: selectedSector || 'Technology',
+			strategy_type: 'Long Call',
+			entry_date: selectedDate || new Date().toISOString().split('T')[0],
+			expiration_date: '',
+			target_price: '',
+			stop_loss: '',
+			notes: ''
+		};
+		errors = {};
+	}
 
 	// Form validation
 	function validateForm() {
@@ -123,13 +149,7 @@
 				toastStore.success('Trade created successfully!');
 			}
 
-			// Refresh trades store
-			await tradesStore.loadActiveTradesByDateRange(
-				new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 1 week ago
-				new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)  // 2 weeks ahead
-			);
-
-			// Close modal and notify parent
+			// Close modal and notify parent first
 			close();
 			dispatch('trade-saved', result);
 

@@ -26,6 +26,9 @@
 		search: ''
 	};
 	let filteredTrades = [];
+	
+	// Table state
+	let allTrades = []; // All trades regardless of date filter
 
 	// View state
 	let currentView = 'grid'; // 'grid', 'analytics', 'heatmap'
@@ -72,11 +75,29 @@
 			endDate.setDate(startDate.getDate() + 20); // 3 weeks
 			
 			await tradesStore.loadTradesByDateRange(startDate, endDate);
+			
+			// Also load all trades for the table (wider date range)
+			await loadAllTrades();
 		} catch (error) {
 			console.error('Failed to load trades:', error);
 			toastStore.error('Failed to load trades');
 		} finally {
 			loading = false;
+		}
+	}
+	
+	async function loadAllTrades() {
+		try {
+			const startDate = new Date();
+			startDate.setMonth(startDate.getMonth() - 6); // 6 months ago
+			const endDate = new Date();
+			endDate.setMonth(endDate.getMonth() + 6); // 6 months ahead
+			
+			const allTradesData = await window.go.main.App.GetTrades(startDate, endDate);
+			allTrades = allTradesData || [];
+		} catch (error) {
+			console.error('Failed to load all trades:', error);
+			allTrades = [];
 		}
 	}
 
@@ -122,10 +143,31 @@
 		selectedSectorForNew = null;
 	}
 
-	function handleTradeSaved() {
+	async function handleTradeSaved() {
 		closeModal();
-		// Trades will be automatically refreshed by the modal
-		loadTrades();
+		// Force refresh trades immediately after saving
+		await loadTrades();
+	}
+	
+	// Delete trade functionality
+	async function deleteTrade(trade) {
+		if (!confirm(`Are you sure you want to delete the ${trade.strategy_type} trade for ${trade.ticker}?`)) {
+			return;
+		}
+		
+		try {
+			await window.go.main.App.DeleteTrade(trade.id);
+			toastStore.success('Trade deleted successfully!');
+			await loadTrades();
+		} catch (error) {
+			console.error('Failed to delete trade:', error);
+			toastStore.error('Failed to delete trade');
+		}
+	}
+	
+	// Edit trade functionality 
+	function editTrade(trade) {
+		openEditTradeModal(trade);
 	}
 
 	function formatDateColumn(date) {
@@ -346,6 +388,68 @@
 			{/if}
 		{/if}
 	</main>
+
+	<!-- Trades Table Section -->
+	{#if currentView === 'grid' && allTrades.length > 0}
+		<section class="trades-table-section">
+			<div class="table-header">
+				<h2>All Trades</h2>
+				<p>Manage your existing trades</p>
+			</div>
+			
+			<div class="trades-table-container">
+				<table class="trades-table">
+					<thead>
+						<tr>
+							<th>Ticker</th>
+							<th>Strategy</th>
+							<th>Sector</th>
+							<th>Entry Date</th>
+							<th>Expiration</th>
+							<th>Target Price</th>
+							<th>Stop Loss</th>
+							<th>Status</th>
+							<th>Actions</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each allTrades as trade}
+							<tr>
+								<td class="ticker-cell">{trade.ticker}</td>
+								<td class="strategy-cell">
+									<span class="strategy-badge">{trade.strategy_type}</span>
+								</td>
+								<td>{trade.sector}</td>
+								<td>{new Date(trade.entry_date).toLocaleDateString()}</td>
+								<td>{new Date(trade.expiration_date).toLocaleDateString()}</td>
+								<td>{trade.target_price ? `$${trade.target_price.toFixed(2)}` : '-'}</td>
+								<td>{trade.stop_loss ? `$${trade.stop_loss.toFixed(2)}` : '-'}</td>
+								<td>
+									<span class="status-badge status-{trade.status}">{trade.status}</span>
+								</td>
+								<td class="actions-cell">
+									<button 
+										class="action-btn edit-btn" 
+										on:click={() => editTrade(trade)}
+										title="Edit trade"
+									>
+										✏️
+									</button>
+									<button 
+										class="action-btn delete-btn" 
+										on:click={() => deleteTrade(trade)}
+										title="Delete trade"
+									>
+										❌
+									</button>
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		</section>
+	{/if}
 </div>
 
 <!-- Trade Modal -->
@@ -663,6 +767,126 @@
 		}
 	}
 
+	/* Trades Table Styles */
+	.trades-table-section {
+		padding: 24px;
+		border-top: 1px solid rgba(255, 255, 255, 0.1);
+		background: rgba(0, 0, 0, 0.2);
+	}
+	
+	.table-header {
+		margin-bottom: 20px;
+	}
+	
+	.table-header h2 {
+		font-size: 1.8rem;
+		font-weight: 600;
+		margin-bottom: 8px;
+		color: #ffffff;
+	}
+	
+	.table-header p {
+		color: #aaa;
+		margin: 0;
+	}
+	
+	.trades-table-container {
+		background: rgba(255, 255, 255, 0.05);
+		border-radius: 12px;
+		overflow: hidden;
+		border: 1px solid rgba(255, 255, 255, 0.1);
+	}
+	
+	.trades-table {
+		width: 100%;
+		border-collapse: collapse;
+	}
+	
+	.trades-table th {
+		background: rgba(74, 144, 226, 0.2);
+		color: #ffffff;
+		padding: 16px 12px;
+		text-align: left;
+		font-weight: 600;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+	}
+	
+	.trades-table td {
+		padding: 12px;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+		color: #cccccc;
+	}
+	
+	.trades-table tbody tr:hover {
+		background: rgba(255, 255, 255, 0.03);
+	}
+	
+	.ticker-cell {
+		font-weight: 600;
+		font-family: monospace;
+		color: #4a90e2;
+	}
+	
+	.strategy-badge {
+		background: linear-gradient(135deg, #4a90e2, #7b68ee);
+		color: white;
+		padding: 4px 8px;
+		border-radius: 12px;
+		font-size: 0.8rem;
+		font-weight: 500;
+	}
+	
+	.status-badge {
+		padding: 4px 8px;
+		border-radius: 12px;
+		font-size: 0.8rem;
+		font-weight: 500;
+		text-transform: uppercase;
+	}
+	
+	.status-active {
+		background: rgba(34, 197, 94, 0.2);
+		color: #22c55e;
+	}
+	
+	.status-closed {
+		background: rgba(156, 163, 175, 0.2);
+		color: #9ca3af;
+	}
+	
+	.status-expired {
+		background: rgba(239, 68, 68, 0.2);
+		color: #ef4444;
+	}
+	
+	.actions-cell {
+		text-align: center;
+	}
+	
+	.action-btn {
+		background: none;
+		border: none;
+		padding: 8px;
+		margin: 0 2px;
+		border-radius: 6px;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		font-size: 1rem;
+	}
+	
+	.action-btn:hover {
+		background: rgba(255, 255, 255, 0.1);
+		transform: scale(1.1);
+	}
+	
+	.edit-btn:hover {
+		background: rgba(74, 144, 226, 0.2);
+	}
+	
+	.delete-btn:hover {
+		background: rgba(239, 68, 68, 0.2);
+	}
+
 	@media (max-width: 768px) {
 		.trades-view {
 			padding: 12px;
@@ -675,6 +899,18 @@
 		.nav-button, .today-button {
 			padding: 10px 16px;
 			font-size: 0.8rem;
+		}
+		
+		.trades-table-section {
+			padding: 16px;
+		}
+		
+		.trades-table-container {
+			overflow-x: auto;
+		}
+		
+		.trades-table {
+			min-width: 800px;
 		}
 	}
 </style> 

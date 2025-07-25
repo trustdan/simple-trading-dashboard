@@ -48,8 +48,19 @@ function createMarketStore() {
 			update(state => ({ ...state, loading: true }));
 			
 			try {
-				// Call the Wails backend API
-				const rating = await window.go.main.App.GetLatestMarketRating();
+				// Add a timeout to prevent infinite loading
+				const timeoutPromise = new Promise((_, reject) => 
+					setTimeout(() => reject(new Error('Request timeout')), 10000)
+				);
+				
+				// Call the Wails backend API with timeout
+				const rating = await Promise.race([
+					window.go.main.App.GetLatestMarketRating(),
+					timeoutPromise
+				]);
+				
+				// Check if this is a valid rating or a default fallback
+				const isDefaultRating = rating.id === 0 && rating.overall_rating === 0;
 				
 				update(state => ({
 					...state,
@@ -58,9 +69,21 @@ function createMarketStore() {
 					lastSaved: rating.created_at,
 					loading: false
 				}));
+				
+				// Only log success for real data, not defaults
+				if (!isDefaultRating) {
+					console.log('Market rating loaded successfully:', rating);
+				} else {
+					console.log('Using default market rating - database may not be initialized');
+				}
 			} catch (error) {
 				console.error('Failed to load latest rating:', error);
-				update(state => ({ ...state, loading: false }));
+				update(state => ({ 
+					...state, 
+					loading: false,
+					overallRating: 0,
+					sectorRatings: {}
+				}));
 				throw error;
 			}
 		},

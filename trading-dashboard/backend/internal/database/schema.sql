@@ -56,20 +56,45 @@ CREATE TABLE strategy_types (
 
 -- Insert default strategy types
 INSERT INTO strategy_types (name, category, description, color_hex) VALUES
--- Bullish Strategies
-('Long Call', 'Bullish', 'Buy call options expecting price increase', '#22c55e'),
-('Bull Call Spread', 'Bullish', 'Buy lower strike call, sell higher strike call', '#16a34a'),
-('Cash-Secured Put', 'Bullish', 'Sell puts with cash backing to acquire shares', '#15803d'),
+-- Basic Strategies
+('Long Call', 'Basic', 'Buy call options expecting price increase', '#3b82f6'),
+('Long Put', 'Basic', 'Buy put options expecting price decrease', '#60a5fa'),
 
--- Bearish Strategies  
-('Long Put', 'Bearish', 'Buy put options expecting price decrease', '#ef4444'),
-('Bear Put Spread', 'Bearish', 'Buy higher strike put, sell lower strike put', '#dc2626'),
-('Covered Call', 'Bearish', 'Sell calls against owned shares', '#b91c1c'),
+-- Income Strategies
+('Covered Call', 'Income', 'Sell calls against owned shares for premium income', '#22c55e'),
+('Cash-Secured Put', 'Income', 'Sell puts with cash backing to generate income', '#16a34a'),
+
+-- Credit Spreads
+('Bull Put Spread', 'Credit Spreads', 'Sell higher strike put, buy lower strike put for credit', '#f97316'),
+('Bear Call Spread', 'Credit Spreads', 'Sell lower strike call, buy higher strike call for credit', '#ea580c'),
 
 -- Neutral Strategies
-('Iron Condor', 'Neutral', 'Sell call and put spreads for range-bound profit', '#8b5cf6'),
-('Butterfly Spread', 'Neutral', 'Limited risk/reward for minimal price movement', '#7c3aed'),
-('Straddle', 'Neutral', 'Buy call and put at same strike for volatility play', '#6d28d9');
+('Iron Butterfly', 'Neutral', 'Sell ATM call and put, buy OTM wings for range-bound profit', '#8b5cf6'),
+('Iron Condor', 'Neutral', 'Sell call and put spreads for range-bound profit', '#7c3aed'),
+('Long Put Butterfly', 'Neutral', 'Buy two puts at middle strike, sell one each at higher and lower strikes', '#6d28d9'),
+('Long Call Butterfly', 'Neutral', 'Buy two calls at middle strike, sell one each at higher and lower strikes', '#5b21b6'),
+
+-- Calendar Spreads
+('Calendar Call Spread', 'Calendar Spreads', 'Sell near-term call, buy longer-term call at same strike', '#14b8a6'),
+('Calendar Put Spread', 'Calendar Spreads', 'Sell near-term put, buy longer-term put at same strike', '#0d9488'),
+('Diagonal Call Spread', 'Calendar Spreads', 'Sell near-term call, buy longer-term call at different strike', '#0f766e'),
+('Diagonal Put Spread', 'Calendar Spreads', 'Sell near-term put, buy longer-term put at different strike', '#134e4a'),
+
+-- Debit Spreads
+('Bull Call Spread', 'Debit Spreads', 'Buy lower strike call, sell higher strike call', '#1d4ed8'),
+('Bear Put Spread', 'Debit Spreads', 'Buy higher strike put, sell lower strike put', '#1e40af'),
+
+-- Directional Strategies
+('Straddle', 'Directional', 'Buy call and put at same strike for volatility play', '#dc2626'),
+('Strangle', 'Directional', 'Buy OTM call and put for volatility play', '#b91c1c'),
+
+-- Ratio Spreads
+('Call Ratio Backspread', 'Ratio Spreads', 'Sell fewer ITM calls, buy more OTM calls', '#92400e'),
+('Put Broken Wing', 'Ratio Spreads', 'Modified put butterfly with uneven wings', '#a16207'),
+('Inverse Call Broken Wing', 'Ratio Spreads', 'Modified call butterfly with inverted risk profile', '#ca8a04'),
+('Put Ratio Backspread', 'Ratio Spreads', 'Sell fewer ITM puts, buy more OTM puts', '#eab308'),
+('Call Broken Wing', 'Ratio Spreads', 'Modified call butterfly with uneven wings', '#facc15'),
+('Inverse Put Broken Wing', 'Ratio Spreads', 'Modified put butterfly with inverted risk profile', '#fde047');
 
 -- Indexes for trades table
 CREATE INDEX idx_trades_ticker ON options_trades(ticker);
