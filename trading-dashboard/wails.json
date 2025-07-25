@@ -1,0 +1,38 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "trading-dashboard",
+  "outputfilename": "trading-dashboard",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "Trading Dashboard",
+    "email": "admin@trading-dashboard.com"
+  },
+  "info": {
+    "productName": "Trading Dashboard",
+    "productVersion": "1.0.0",
+    "copyright": "Copyright © 2025 Trading Dashboard",
+    "comments": "A comprehensive trading analysis and market rating dashboard"
+  },
+  "nsisType": "multiple",
+  "obfuscated": false,
+  "garbleargs": "",
+  "windows": {
+    "theme": "auto",
+    "resizable": true,
+    "width": 1200,
+    "height": 800,
+    "minWidth": 800,
+    "minHeight": 600,
+    "disableResize": false,
+    "fullscreen": false,
+    "maximised": false,
+    "minimised": false,
+    "hiddenOnClose": false,
+    "webviewGpuPolicy": "onDemand",
+    "onStartup": "normal",
+    "windowStartState": "normal"
+  }
+}

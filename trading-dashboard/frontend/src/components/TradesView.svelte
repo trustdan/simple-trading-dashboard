@@ -1,0 +1,680 @@
+<script>
+	import TradeCell from './TradeCell.svelte';
+	import TradeModal from './TradeModal.svelte';
+	import TradeFilters from './TradeFilters.svelte';
+	import TradeAnalytics from './TradeAnalytics.svelte';
+	import TradeHeatMap from './TradeHeatMap.svelte';
+	import TradeExporter from './TradeExporter.svelte';
+	import { onMount } from 'svelte';
+	import { tradesStore } from '../stores/trades.js';
+	import { toastStore } from '../stores/toast.js';
+
+	let loading = false;
+	let currentWeekStart = new Date();
+	
+	// Modal state
+	let isModalOpen = false;
+	let selectedTradeForEdit = null;
+	let selectedDateForNew = null;
+	let selectedSectorForNew = null;
+
+	// Filter state
+	let filters = {
+		status: 'all',
+		strategy: 'all',
+		sector: 'all',
+		search: ''
+	};
+	let filteredTrades = [];
+
+	// View state
+	let currentView = 'grid'; // 'grid', 'analytics', 'heatmap'
+	
+	// Get trades and date columns from store
+	$: trades = $tradesStore.trades;
+	$: dateColumns = $tradesStore.dateColumns;
+	$: sectors = $tradesStore.sectors;
+
+	// Apply filters to trades
+	$: filteredTrades = applyFilters(trades, filters);
+
+	// Set the current week to start on Monday
+	onMount(() => {
+		const today = new Date();
+		const dayOfWeek = today.getDay();
+		const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Sunday = 0, Monday = 1
+		currentWeekStart = new Date(today);
+		currentWeekStart.setDate(today.getDate() + mondayOffset);
+		
+		generateDateColumns();
+		loadTrades();
+	});
+
+	function generateDateColumns() {
+		const columns = [];
+		const startDate = new Date(currentWeekStart);
+		
+		// Generate 21 days (3 weeks)
+		for (let i = 0; i < 21; i++) {
+			const date = new Date(startDate);
+			date.setDate(startDate.getDate() + i);
+			columns.push(date);
+		}
+		
+		tradesStore.setDateColumns(columns);
+	}
+
+	async function loadTrades() {
+		loading = true;
+		try {
+			const startDate = new Date(currentWeekStart);
+			const endDate = new Date(currentWeekStart);
+			endDate.setDate(startDate.getDate() + 20); // 3 weeks
+			
+			await tradesStore.loadTradesByDateRange(startDate, endDate);
+		} catch (error) {
+			console.error('Failed to load trades:', error);
+			toastStore.error('Failed to load trades');
+		} finally {
+			loading = false;
+		}
+	}
+
+	function navigateWeek(direction) {
+		const newStart = new Date(currentWeekStart);
+		newStart.setDate(currentWeekStart.getDate() + (direction * 7));
+		currentWeekStart = newStart;
+		
+		generateDateColumns();
+		loadTrades();
+	}
+
+	function goToToday() {
+		const today = new Date();
+		const dayOfWeek = today.getDay();
+		const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+		currentWeekStart = new Date(today);
+		currentWeekStart.setDate(today.getDate() + mondayOffset);
+		
+		generateDateColumns();
+		loadTrades();
+	}
+
+	// Modal handlers
+	function openNewTradeModal(date = null, sector = null) {
+		selectedTradeForEdit = null;
+		selectedDateForNew = date ? date.toISOString().split('T')[0] : null;
+		selectedSectorForNew = sector;
+		isModalOpen = true;
+	}
+
+	function openEditTradeModal(trade) {
+		selectedTradeForEdit = trade;
+		selectedDateForNew = null;
+		selectedSectorForNew = null;
+		isModalOpen = true;
+	}
+
+	function closeModal() {
+		isModalOpen = false;
+		selectedTradeForEdit = null;
+		selectedDateForNew = null;
+		selectedSectorForNew = null;
+	}
+
+	function handleTradeSaved() {
+		closeModal();
+		// Trades will be automatically refreshed by the modal
+		loadTrades();
+	}
+
+	function formatDateColumn(date) {
+		const today = new Date();
+		const isToday = date.toDateString() === today.toDateString();
+		
+		return {
+			dayName: date.toLocaleDateString('en-US', { weekday: 'short' }),
+			dayNumber: date.getDate(),
+			month: date.toLocaleDateString('en-US', { month: 'short' }),
+			isToday,
+			isWeekend: date.getDay() === 0 || date.getDay() === 6
+		};
+	}
+
+	function applyFilters(trades, filters) {
+		return trades.filter(trade => {
+			// Status filter
+			if (filters.status !== 'all' && trade.status !== filters.status) {
+				return false;
+			}
+
+			// Strategy filter
+			if (filters.strategy !== 'all' && trade.strategy_type !== filters.strategy) {
+				return false;
+			}
+
+			// Sector filter
+			if (filters.sector !== 'all' && trade.sector !== filters.sector) {
+				return false;
+			}
+
+			// Search filter
+			if (filters.search.trim() !== '') {
+				const searchTerm = filters.search.toLowerCase();
+				const ticker = trade.ticker.toLowerCase();
+				if (!ticker.includes(searchTerm)) {
+					return false;
+				}
+			}
+
+			return true;
+		});
+	}
+
+	function getTradesForCell(sector, date) {
+		return filteredTrades.filter(trade => {
+			const entryDate = new Date(trade.entry_date);
+			const expirationDate = new Date(trade.expiration_date);
+			const cellDate = new Date(date);
+			
+			return trade.sector === sector &&
+				   cellDate >= entryDate &&
+				   cellDate <= expirationDate;
+		});
+	}
+
+	function handleFiltersChange(event) {
+		filters = event.detail;
+	}
+
+	async function handleTradeStatusChange(event) {
+		const { trade, newStatus } = event.detail;
+		
+		try {
+			await window.go.main.App.UpdateTradeStatus(trade.id, newStatus);
+			toastStore.success(`Trade status updated to ${newStatus}`);
+			// Reload trades to get updated data
+			loadTrades();
+		} catch (error) {
+			console.error('Error updating trade status:', error);
+			toastStore.error(`Failed to update trade status: ${error.message || error}`);
+		}
+	}
+</script>
+
+<div class="trades-view">
+	<header class="trades-header">
+		<div class="header-content">
+			<h1>Options Trading Calendar</h1>
+			<p>Track your options positions across time and sectors</p>
+		</div>
+		
+		<div class="header-controls">
+			<button class="nav-button" on:click={() => navigateWeek(-1)}>
+				← Previous Week
+			</button>
+			
+			<button class="today-button" on:click={goToToday}>
+				Today
+			</button>
+			
+			<button class="nav-button" on:click={() => navigateWeek(1)}>
+				Next Week →
+			</button>
+			
+			<div class="view-switcher">
+				<button 
+					class="view-btn" 
+					class:active={currentView === 'grid'}
+					on:click={() => currentView = 'grid'}
+				>
+					📅 Grid
+				</button>
+				<button 
+					class="view-btn" 
+					class:active={currentView === 'analytics'}
+					on:click={() => currentView = 'analytics'}
+				>
+					📊 Analytics
+				</button>
+				<button 
+					class="view-btn" 
+					class:active={currentView === 'heatmap'}
+					on:click={() => currentView = 'heatmap'}
+				>
+					🔥 Heat Map
+				</button>
+			</div>
+
+			<button class="new-trade-button" on:click={() => openNewTradeModal()}>
+				+ New Trade
+			</button>
+		</div>
+	</header>
+
+	{#if loading}
+		<div class="loading-overlay">
+			<div class="loading-spinner"></div>
+			<p>Loading trades...</p>
+		</div>
+	{/if}
+
+	<main class="trades-content">
+		<!-- Filters (only show for grid view) -->
+		{#if currentView === 'grid'}
+			<TradeFilters bind:filters on:filters-change={handleFiltersChange} />
+		{/if}
+
+		<!-- Analytics View -->
+		{#if currentView === 'analytics'}
+			<TradeAnalytics />
+			<TradeExporter />
+		{:else if currentView === 'heatmap'}
+			<TradeHeatMap 
+				trades={filteredTrades} 
+				{dateColumns} 
+				{sectors}
+				on:cell-click={(event) => {
+					const { trades } = event.detail;
+					if (trades.length > 0) {
+						openEditTradeModal(trades[0]);
+					}
+				}}
+			/>
+		{:else}
+			<!-- Grid View -->
+			<div class="trade-grid">
+			<!-- Header row with dates -->
+			<div class="grid-header">
+				<div class="sector-header">Sector</div>
+				{#each dateColumns as date}
+					{@const formatted = formatDateColumn(date)}
+					<div class="date-header" class:today={formatted.isToday} class:weekend={formatted.isWeekend}>
+						<div class="day-name">{formatted.dayName}</div>
+						<div class="day-number">{formatted.dayNumber}</div>
+						<div class="month">{formatted.month}</div>
+					</div>
+				{/each}
+			</div>
+
+			<!-- Grid body with sector rows -->
+			<div class="grid-body">
+				{#each sectors as sector}
+					<div class="sector-row">
+						<div class="sector-label">
+							{sector}
+						</div>
+						
+						{#each dateColumns as date}
+							{@const cellTrades = getTradesForCell(sector, date)}
+							<TradeCell 
+								{sector}
+								{date}
+								trades={cellTrades}
+								on:cellClick={(event) => {
+									const detail = event.detail;
+									if (detail.trades.length > 0) {
+										openEditTradeModal(detail.trades[0]);
+									} else {
+										openNewTradeModal(detail.date, detail.sector);
+									}
+								}}
+								on:tradeClick={(event) => openEditTradeModal(event.detail.trade)}
+								on:status-change={handleTradeStatusChange}
+							/>
+						{/each}
+					</div>
+				{/each}
+			</div>
+			</div>
+
+			{#if filteredTrades.length === 0 && trades.length > 0 && !loading}
+				<div class="empty-state">
+					<div class="empty-icon">🔍</div>
+					<h3>No trades match your filters</h3>
+					<p>Try adjusting your filter criteria to see more trades</p>
+				</div>
+			{:else if trades.length === 0 && !loading}
+				<div class="empty-state">
+					<div class="empty-icon">📊</div>
+					<h3>No trades found</h3>
+					<p>Create your first options trade to see it on the calendar</p>
+					<button class="create-trade-button" on:click={() => openNewTradeModal()}>
+						+ Add Trade
+					</button>
+				</div>
+			{/if}
+		{/if}
+	</main>
+</div>
+
+<!-- Trade Modal -->
+<TradeModal 
+	bind:isOpen={isModalOpen}
+	trade={selectedTradeForEdit}
+	selectedDate={selectedDateForNew}
+	selectedSector={selectedSectorForNew}
+	on:close={closeModal}
+	on:trade-saved={handleTradeSaved}
+/>
+
+<style>
+	.trades-view {
+		min-height: 100vh;
+		background: linear-gradient(135deg, #1a1a1a, #2d2d2d);
+		color: #ffffff;
+	}
+
+	.trades-header {
+		padding: 24px;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 20px;
+	}
+
+	.header-content h1 {
+		font-size: 2.5rem;
+		font-weight: 700;
+		margin-bottom: 8px;
+		background: linear-gradient(135deg, #4a90e2, #7b68ee);
+		background-clip: text;
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+	}
+
+	.header-content p {
+		font-size: 1.1rem;
+		color: #aaa;
+		margin: 0;
+	}
+
+	.header-controls {
+		display: flex;
+		gap: 12px;
+		align-items: center;
+	}
+
+	.nav-button {
+		background: rgba(255, 255, 255, 0.1);
+		border: 1px solid rgba(255, 255, 255, 0.2);
+		color: white;
+		padding: 12px 20px;
+		border-radius: 8px;
+		cursor: pointer;
+		transition: all 0.3s ease;
+		font-size: 0.9rem;
+	}
+
+	.nav-button:hover {
+		background: rgba(255, 255, 255, 0.15);
+		border-color: rgba(74, 144, 226, 0.5);
+	}
+
+	.today-button {
+		background: linear-gradient(135deg, #4a90e2, #7b68ee);
+		border: none;
+		color: white;
+		padding: 12px 24px;
+		border-radius: 8px;
+		cursor: pointer;
+		transition: all 0.3s ease;
+		font-weight: 600;
+	}
+
+	.today-button:hover {
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+	}
+
+	.new-trade-button {
+		background: linear-gradient(135deg, #4a90e2, #7b68ee);
+		border: none;
+		color: white;
+		padding: 12px 24px;
+		border-radius: 8px;
+		cursor: pointer;
+		transition: all 0.3s ease;
+		font-weight: 600;
+		font-size: 0.9rem;
+	}
+
+	.new-trade-button:hover {
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+	}
+
+	.view-switcher {
+		display: flex;
+		background: #2a2a2a;
+		border-radius: 8px;
+		padding: 4px;
+		gap: 2px;
+	}
+
+	.view-btn {
+		background: none;
+		border: none;
+		color: #cccccc;
+		padding: 8px 16px;
+		border-radius: 6px;
+		cursor: pointer;
+		font-size: 14px;
+		font-weight: 500;
+		transition: all 0.2s ease;
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+
+	.view-btn:hover {
+		color: #ffffff;
+		background: rgba(255, 255, 255, 0.05);
+	}
+
+	.view-btn.active {
+		background: linear-gradient(135deg, #4a90e2, #7b68ee);
+		color: white;
+		transform: translateY(-1px);
+		box-shadow: 0 2px 8px rgba(74, 144, 226, 0.3);
+	}
+
+	.loading-overlay {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: rgba(0, 0, 0, 0.7);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		z-index: 1000;
+	}
+
+	.loading-spinner {
+		width: 50px;
+		height: 50px;
+		border: 4px solid #333;
+		border-top: 4px solid #4a90e2;
+		border-radius: 50%;
+		animation: spin 1s linear infinite;
+		margin-bottom: 16px;
+	}
+
+	@keyframes spin {
+		0% { transform: rotate(0deg); }
+		100% { transform: rotate(360deg); }
+	}
+
+	.trades-content {
+		padding: 24px;
+		max-width: 100%;
+		overflow-x: auto;
+	}
+
+	.trade-grid {
+		min-width: 1400px;
+		background: rgba(255, 255, 255, 0.02);
+		border-radius: 12px;
+		overflow: hidden;
+		border: 1px solid rgba(255, 255, 255, 0.1);
+	}
+
+	.grid-header {
+		display: grid;
+		grid-template-columns: 200px repeat(21, 80px);
+		background: rgba(255, 255, 255, 0.05);
+		border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+	}
+
+	.sector-header {
+		padding: 16px;
+		font-weight: 600;
+		font-size: 1.1rem;
+		display: flex;
+		align-items: center;
+		background: rgba(74, 144, 226, 0.1);
+		border-right: 1px solid rgba(255, 255, 255, 0.1);
+	}
+
+	.date-header {
+		padding: 12px 8px;
+		text-align: center;
+		border-right: 1px solid rgba(255, 255, 255, 0.05);
+		transition: background-color 0.2s ease;
+	}
+
+	.date-header.today {
+		background: rgba(74, 144, 226, 0.2);
+		color: #4a90e2;
+		font-weight: 600;
+	}
+
+	.date-header.weekend {
+		background: rgba(255, 255, 255, 0.02);
+		color: #888;
+	}
+
+	.day-name {
+		font-size: 0.8rem;
+		text-transform: uppercase;
+		letter-spacing: 1px;
+		margin-bottom: 4px;
+	}
+
+	.day-number {
+		font-size: 1.2rem;
+		font-weight: 600;
+		margin-bottom: 2px;
+	}
+
+	.month {
+		font-size: 0.7rem;
+		opacity: 0.7;
+		text-transform: uppercase;
+	}
+
+	.grid-body {
+		display: grid;
+		grid-template-rows: repeat(auto, 1fr);
+	}
+
+	.sector-row {
+		display: grid;
+		grid-template-columns: 200px repeat(21, 80px);
+		border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+	}
+
+	.sector-row:last-child {
+		border-bottom: none;
+	}
+
+	.sector-label {
+		padding: 20px 16px;
+		font-weight: 500;
+		font-size: 0.9rem;
+		display: flex;
+		align-items: center;
+		background: rgba(255, 255, 255, 0.02);
+		border-right: 1px solid rgba(255, 255, 255, 0.1);
+		color: #ccc;
+	}
+
+	.empty-state {
+		text-align: center;
+		padding: 80px 24px;
+		color: #888;
+	}
+
+	.empty-icon {
+		font-size: 4rem;
+		margin-bottom: 24px;
+		opacity: 0.5;
+	}
+
+	.empty-state h3 {
+		font-size: 1.5rem;
+		margin-bottom: 12px;
+		color: #ccc;
+	}
+
+	.empty-state p {
+		font-size: 1.1rem;
+		margin-bottom: 32px;
+		max-width: 400px;
+		margin-left: auto;
+		margin-right: auto;
+	}
+
+	.create-trade-button {
+		background: linear-gradient(135deg, #4a90e2, #7b68ee);
+		color: white;
+		border: none;
+		padding: 16px 32px;
+		font-size: 1.1rem;
+		font-weight: 600;
+		border-radius: 8px;
+		cursor: pointer;
+		transition: all 0.3s ease;
+	}
+
+	.create-trade-button:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 8px 16px rgba(74, 144, 226, 0.3);
+	}
+
+	@media (max-width: 1200px) {
+		.trades-header {
+			flex-direction: column;
+			align-items: flex-start;
+		}
+
+		.header-controls {
+			width: 100%;
+			justify-content: center;
+		}
+
+		.trade-grid {
+			min-width: 1200px;
+		}
+	}
+
+	@media (max-width: 768px) {
+		.trades-view {
+			padding: 12px;
+		}
+
+		.header-content h1 {
+			font-size: 2rem;
+		}
+
+		.nav-button, .today-button {
+			padding: 10px 16px;
+			font-size: 0.8rem;
+		}
+	}
+</style> 

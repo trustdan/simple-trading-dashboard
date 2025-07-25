@@ -1,0 +1,16 @@
+{
+  "name": "frontend-temp",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node_modules\\.bin\\vite.cmd",
+    "build": "node_modules\\.bin\\vite.cmd build",
+    "preview": "node_modules\\.bin\\vite.cmd preview"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^6.0.0",
+    "svelte": "^5.35.5",
+    "vite": "^7.0.4"
+  }
+}
