@@ -81,7 +81,7 @@
 	function isTradeExpiring(trade) {
 		const expirationDate = new Date(trade.expiration_date);
 		const cellDate = new Date(date);
-		const diffDays = Math.ceil((expirationDate - cellDate) / (1000 * 60 * 60 * 24));
+		const diffDays = Math.ceil((expirationDate.getTime() - cellDate.getTime()) / (1000 * 60 * 60 * 24));
 		return diffDays <= 3 && diffDays >= 0; // Expiring within 3 days
 	}
 
@@ -94,7 +94,7 @@
 	function getDaysToExpiration(trade) {
 		const expirationDate = new Date(trade.expiration_date);
 		const cellDate = new Date(date);
-		return Math.ceil((expirationDate - cellDate) / (1000 * 60 * 60 * 24));
+		return Math.ceil((expirationDate.getTime() - cellDate.getTime()) / (1000 * 60 * 60 * 24));
 	}
 
 	function handleStatusChange(event) {

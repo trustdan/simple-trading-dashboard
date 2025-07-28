@@ -47,7 +47,7 @@ function createTradesStore() {
 				
 				// Call the Wails backend API with timeout
 				const trades = await Promise.race([
-					window.go.main.App.GetActiveTradesByDateRange(startDate, endDate),
+					window['go']['main']['App']['GetActiveTradesByDateRange'](startDate, endDate),
 					timeoutPromise
 				]);
 				
@@ -80,7 +80,7 @@ function createTradesStore() {
 				
 				// Call the Wails backend API with timeout
 				const strategies = await Promise.race([
-					window.go.main.App.GetStrategyTypes(),
+					window['go']['main']['App']['GetStrategyTypes'](),
 					timeoutPromise
 				]);
 				
@@ -106,7 +106,7 @@ function createTradesStore() {
 			update(state => ({ ...state, loading: true }));
 			
 			try {
-				const newTrade = await window.go.main.App.CreateTrade(tradeRequest);
+				const newTrade = await window['go']['main']['App']['CreateTrade'](tradeRequest);
 				
 				update(state => ({
 					...state,
@@ -127,7 +127,7 @@ function createTradesStore() {
 			update(state => ({ ...state, loading: true }));
 			
 			try {
-				const updatedTrade = await window.go.main.App.UpdateTrade(id, tradeRequest);
+				const updatedTrade = await window['go']['main']['App']['UpdateTrade'](id, tradeRequest);
 				
 				update(state => ({
 					...state,
@@ -148,7 +148,7 @@ function createTradesStore() {
 		// Update trade status
 		updateTradeStatus: async (id, status) => {
 			try {
-				const updatedTrade = await window.go.main.App.UpdateTradeStatus(id, status);
+				const updatedTrade = await window['go']['main']['App']['UpdateTradeStatus'](id, status);
 				
 				update(state => ({
 					...state,
@@ -167,7 +167,7 @@ function createTradesStore() {
 		// Delete a trade
 		deleteTrade: async (id) => {
 			try {
-				await window.go.main.App.DeleteTrade(id);
+				await window['go']['main']['App']['DeleteTrade'](id);
 				
 				update(state => ({
 					...state,

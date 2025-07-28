@@ -25,7 +25,7 @@
 		sector: 'all',
 		search: ''
 	};
-	let filteredTrades = [];
+	let filteredTrades = []; // Initialize with empty array
 	
 	// Table state
 	let allTrades = []; // All trades regardless of date filter
@@ -33,13 +33,31 @@
 	// View state
 	let currentView = 'grid'; // 'grid', 'analytics', 'heatmap'
 	
-	// Get trades and date columns from store
-	$: trades = $tradesStore.trades;
-	$: dateColumns = $tradesStore.dateColumns;
-	$: sectors = $tradesStore.sectors;
+	// Memoization for expensive operations
+	let tradesCache = new Map();
+	let lastFilters = null;
+	let lastTradesLength = 0;
+	
+	// Get trades and date columns from store with safe defaults
+	$: trades = $tradesStore?.trades || [];
+	$: dateColumns = $tradesStore?.dateColumns || [];
+	$: sectors = $tradesStore?.sectors || [];
 
-	// Apply filters to trades
-	$: filteredTrades = applyFilters(trades, filters);
+	// Apply filters to trades with memoization (only if store is ready)
+	$: if ($tradesStore && trades) {
+		// Only recompute filtered trades if trades or filters actually changed
+		const filtersKey = JSON.stringify(filters);
+		const tradesChanged = trades.length !== lastTradesLength || lastFilters !== filtersKey;
+		
+		if (tradesChanged) {
+			filteredTrades = applyFilters(trades, filters);
+			lastFilters = filtersKey;
+			lastTradesLength = trades.length;
+			
+			// Clear cache when trades change
+			tradesCache.clear();
+		}
+	}
 
 	// Set the current week to start on Monday
 	onMount(() => {
@@ -93,7 +111,7 @@
 			const endDate = new Date();
 			endDate.setMonth(endDate.getMonth() + 6); // 6 months ahead
 			
-			const allTradesData = await window.go.main.App.GetTrades(startDate, endDate);
+			const allTradesData = await window['go']['main']['App']['GetTrades'](startDate, endDate);
 			allTrades = allTradesData || [];
 		} catch (error) {
 			console.error('Failed to load all trades:', error);
@@ -156,7 +174,7 @@
 		}
 		
 		try {
-			await window.go.main.App.DeleteTrade(trade.id);
+			await window['go']['main']['App']['DeleteTrade'](trade.id);
 			toastStore.success('Trade deleted successfully!');
 			await loadTrades();
 		} catch (error) {
@@ -214,15 +232,37 @@
 	}
 
 	function getTradesForCell(sector, date) {
-		return filteredTrades.filter(trade => {
-			const entryDate = new Date(trade.entry_date);
-			const expirationDate = new Date(trade.expiration_date);
-			const cellDate = new Date(date);
+		// Create a cache key for memoization
+		const cacheKey = `${sector}-${date.getTime()}`;
+		
+		// Return cached result if available
+		if (tradesCache.has(cacheKey)) {
+			return tradesCache.get(cacheKey);
+		}
+		
+		// Convert date once for comparison
+		const cellTime = date.getTime();
+		
+		const result = filteredTrades.filter(trade => {
+			// Quick sector check first (most trades will fail this)
+			if (trade.sector !== sector) {
+				return false;
+			}
 			
-			return trade.sector === sector &&
-				   cellDate >= entryDate &&
-				   cellDate <= expirationDate;
+			// Parse dates only once per trade (cache in trade object if needed)
+			if (!trade._entryTime) {
+				trade._entryTime = new Date(trade.entry_date).getTime();
+			}
+			if (!trade._expirationTime) {
+				trade._expirationTime = new Date(trade.expiration_date).getTime();
+			}
+			
+			return cellTime >= trade._entryTime && cellTime <= trade._expirationTime;
 		});
+		
+		// Cache the result
+		tradesCache.set(cacheKey, result);
+		return result;
 	}
 
 	function handleFiltersChange(event) {
@@ -233,7 +273,7 @@
 		const { trade, newStatus } = event.detail;
 		
 		try {
-			await window.go.main.App.UpdateTradeStatus(trade.id, newStatus);
+			await window['go']['main']['App']['UpdateTradeStatus'](trade.id, newStatus);
 			toastStore.success(`Trade status updated to ${newStatus}`);
 			// Reload trades to get updated data
 			loadTrades();
@@ -329,7 +369,7 @@
 			<!-- Header row with dates -->
 			<div class="grid-header">
 				<div class="sector-header">Sector</div>
-				{#each dateColumns as date}
+				{#each dateColumns || [] as date}
 					{@const formatted = formatDateColumn(date)}
 					<div class="date-header" class:today={formatted.isToday} class:weekend={formatted.isWeekend}>
 						<div class="day-name">{formatted.dayName}</div>
@@ -341,13 +381,13 @@
 
 			<!-- Grid body with sector rows -->
 			<div class="grid-body">
-				{#each sectors as sector}
+				{#each sectors || [] as sector}
 					<div class="sector-row">
 						<div class="sector-label">
 							{sector}
 						</div>
 						
-						{#each dateColumns as date}
+						{#each dateColumns || [] as date}
 							{@const cellTrades = getTradesForCell(sector, date)}
 							<TradeCell 
 								{sector}

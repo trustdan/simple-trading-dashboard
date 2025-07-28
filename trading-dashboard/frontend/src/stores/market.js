@@ -55,7 +55,7 @@ function createMarketStore() {
 				
 				// Call the Wails backend API with timeout
 				const rating = await Promise.race([
-					window.go.main.App.GetLatestMarketRating(),
+					window['go']['main']['App']['GetLatestMarketRating'](),
 					timeoutPromise
 				]);
 				
@@ -102,7 +102,7 @@ function createMarketStore() {
 					sector_ratings: currentState.sectorRatings
 				};
 				
-				const savedRating = await window.go.main.App.SaveMarketRating(request);
+				const savedRating = await window['go']['main']['App']['SaveMarketRating'](request);
 				
 				update(state => ({
 					...state,

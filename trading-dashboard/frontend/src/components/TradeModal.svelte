@@ -12,6 +12,9 @@
 	export let selectedDate = null; // If creating new trade for specific date
 	export let selectedSector = null; // If creating new trade for specific sector
 
+	// Use sectors from market store for consistency (must be before formData)
+	const sectors = SECTORS;
+
 	// Form data
 	let formData = {
 		ticker: '',
@@ -28,9 +31,6 @@
 	let isLoading = false;
 	let errors = {};
 	let strategyTypes = [];
-
-	// Use sectors from market store for consistency
-	const sectors = SECTORS;
 
 	// Load strategy types and populate form
 	onMount(async () => {
@@ -138,11 +138,11 @@
 			let result;
 			if (trade && typeof trade === 'object' && trade.id) {
 				// Update existing trade
-				result = await window.go.main.App.UpdateTrade(trade.id, requestData);
+				result = await window['go']['main']['App']['UpdateTrade'](trade.id, requestData);
 				toastStore.success('Trade updated successfully!');
 			} else {
 				// Create new trade
-				result = await window.go.main.App.CreateTrade(requestData);
+				result = await window['go']['main']['App']['CreateTrade'](requestData);
 				toastStore.success('Trade created successfully!');
 			}
 
