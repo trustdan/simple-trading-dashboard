@@ -130,4 +130,5 @@ function createMarketStore() {
 	};
 }
 
-export const marketStore = createMarketStore(); 
+export const marketStore = createMarketStore();
+export { SECTORS }; 

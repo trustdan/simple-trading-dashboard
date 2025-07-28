@@ -8,6 +8,8 @@
 	const dispatch = createEventDispatcher();
 
 	let isDropdownOpen = false;
+	let badgeElement;
+	let dropdownElement;
 
 	const statusConfig = {
 		active: {
@@ -45,7 +47,41 @@
 		if (showDropdown) {
 			event.stopPropagation();
 			isDropdownOpen = !isDropdownOpen;
+			
+			if (isDropdownOpen && badgeElement) {
+				// Use setTimeout to ensure DOM is updated
+				setTimeout(() => {
+					positionDropdown();
+				}, 0);
+			}
 		}
+	}
+	
+	function positionDropdown() {
+		if (!badgeElement || !dropdownElement) return;
+		
+		const rect = badgeElement.getBoundingClientRect();
+		const dropdownRect = dropdownElement.getBoundingClientRect();
+		
+		// Calculate position
+		let top = rect.bottom + 4;
+		let left = rect.left;
+		
+		// Check if dropdown would go off screen bottom
+		if (top + dropdownRect.height > window.innerHeight - 10) {
+			// Position above the badge instead
+			top = rect.top - dropdownRect.height - 4;
+		}
+		
+		// Check if dropdown would go off screen right
+		if (left + dropdownRect.width > window.innerWidth - 10) {
+			left = rect.right - dropdownRect.width;
+		}
+		
+		// Apply position
+		dropdownElement.style.position = 'fixed';
+		dropdownElement.style.top = `${top}px`;
+		dropdownElement.style.left = `${left}px`;
 	}
 
 	function closeDropdown() {
@@ -63,10 +99,15 @@
 	$: sizeClass = `badge-${size}`;
 </script>
 
-<svelte:window on:click={handleClickOutside} />
+<svelte:window 
+	on:click={handleClickOutside} 
+	on:scroll={() => isDropdownOpen && positionDropdown()}
+	on:resize={() => isDropdownOpen && closeDropdown()}
+/>
 
 <div class="status-badge-container" class:interactive={showDropdown}>
 	<button
+		bind:this={badgeElement}
 		class="status-badge {sizeClass}"
 		class:clickable={showDropdown}
 		style="color: {currentStatus.color}; background-color: {currentStatus.bgColor}; border-color: {currentStatus.color};"
@@ -79,26 +120,26 @@
 			<span class="dropdown-arrow">▼</span>
 		{/if}
 	</button>
-
-	{#if showDropdown && isDropdownOpen}
-		<div class="status-dropdown">
-			{#each Object.entries(statusConfig) as [statusKey, config]}
-				<button
-					class="status-option"
-					class:current={statusKey === trade.status}
-					style="color: {config.color};"
-					on:click={() => handleStatusChange(statusKey)}
-				>
-					<span class="status-icon">{config.icon}</span>
-					<span class="status-label">{config.label}</span>
-					{#if statusKey === trade.status}
-						<span class="checkmark">✓</span>
-					{/if}
-				</button>
-			{/each}
-		</div>
-	{/if}
 </div>
+
+{#if showDropdown && isDropdownOpen}
+	<div bind:this={dropdownElement} class="status-dropdown-portal">
+		{#each Object.entries(statusConfig) as [statusKey, config]}
+			<button
+				class="status-option"
+				class:current={statusKey === trade.status}
+				style="color: {config.color};"
+				on:click={() => handleStatusChange(statusKey)}
+			>
+				<span class="status-icon">{config.icon}</span>
+				<span class="status-label">{config.label}</span>
+				{#if statusKey === trade.status}
+					<span class="checkmark">✓</span>
+				{/if}
+			</button>
+		{/each}
+	</div>
+{/if}
 
 <style>
 	.status-badge-container {
@@ -158,11 +199,9 @@
 		transform: rotate(180deg);
 	}
 
-	.status-dropdown {
-		position: absolute;
-		top: 100%;
-		left: 0;
-		z-index: 1000;
+	.status-dropdown-portal {
+		position: fixed;
+		z-index: 9999;
 		background: #1a1a1a;
 		border: 1px solid #333;
 		border-radius: 8px;

@@ -4,110 +4,151 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an **Options Trading Dashboard** - a Windows desktop application built with Wails v2, Go backend, and Svelte frontend. The project is currently in planning phase with no code implemented yet.
+**Options Trading Dashboard** - A Windows desktop application built with:
+- **Desktop Framework**: Wails v2 (creates native Windows executable)
+- **Backend**: Go with SQLite for local storage
+- **Frontend**: Svelte (plain JavaScript, NO TypeScript)
+- **Database**: SQLite with database/sql package
 
 ## Development Commands
 
-### Initial Setup
+### Running in Development Mode
 ```bash
-# Install Wails
-go install github.com/wailsapp/wails/v2/cmd/wails@latest
-
-# Install pnpm (preferred over npm to avoid node_modules issues)
-npm install -g pnpm
-
-# Initialize the project
-wails init -n trading-dashboard -t vanilla
-
-# Setup backend
-cd backend && go mod init trading-dashboard
-
-# Setup frontend
-cd frontend && pnpm create vite . --template svelte && pnpm install
+cd trading-dashboard
+wails dev
 ```
 
-### Development
+### Building for Production
 ```bash
-# Run in development mode
-wails dev
+# From project root - builds both exe and installer
+./build.ps1
 
-# Build for production
-cd frontend && pnpm run build
-cd .. && wails build -platform windows/amd64 -clean
+# Or manually from trading-dashboard directory
+wails build --clean --nsis
+```
+
+### Frontend Development
+```bash
+cd trading-dashboard/frontend
+npm install  # or pnpm install
+npm run dev  # Vite dev server
+npm run build  # Production build
 ```
 
 ## Architecture
 
-- **Desktop Framework**: Wails v2 (creates native Windows executable)
-- **Backend**: Go with Gin/Echo REST API, SQLite for local storage
-- **Frontend**: Svelte (plain JavaScript, NO TypeScript), custom CSS
-- **Database**: SQLite with GORM or sqlx
-- **State Management**: Svelte stores with API integration
-
-### Project Structure
+### Directory Structure
 ```
-trading-dashboard/
-├── backend/
-│   ├── cmd/server/      # Main application entry
-│   ├── internal/
-│   │   ├── api/         # REST endpoints
-│   │   ├── models/      # Data models
-│   │   ├── services/    # Business logic
-│   │   └── database/    # Database layer
-│   └── pkg/utils/       # Shared utilities
-├── frontend/
+trading-dashboard/           # Main application directory
+├── app.go                  # Main application struct with API methods
+├── main.go                 # Entry point
+├── wails.json             # Wails configuration
+├── frontend/              # Svelte frontend
 │   ├── src/
-│   │   ├── components/  # UI components (dials, grids)
-│   │   ├── stores/      # Svelte stores
-│   │   ├── services/    # API client
-│   │   └── utils/       # Frontend utilities
-│   └── public/
-└── PROGRESS_LOG.md      # MANDATORY progress tracking
+│   │   ├── components/    # UI components (Dial, TradeCell, etc.)
+│   │   ├── stores/       # Svelte stores (market.js, trades.js)
+│   │   └── App.svelte    # Main app component
+│   └── package.json      # Uses node_modules\.bin\vite.cmd on Windows
+├── pkg/                   # Go packages
+│   ├── database/         # Database connection and schema
+│   ├── models/           # Data models (MarketRating, OptionsTrade)
+│   └── services/         # Business logic (MarketService, TradeService)
+└── build/bin/            # Build output directory
 ```
+
+### Key API Methods (app.go)
+
+**Market Rating API:**
+- `SaveMarketRating(req models.MarketRatingRequest)` - Save market sentiment
+- `GetLatestMarketRating()` - Get current market ratings
+- `GetSectorNames()` - Get list of 11 market sectors
+
+**Trading API:**
+- `CreateTrade(req models.TradeRequest)` - Create new options trade
+- `GetTrades(startDate, endDate time.Time)` - Get trades by date range
+- `UpdateTrade(id int64, req models.TradeRequest)` - Update trade
+- `UpdateTradeStatus(id int64, status string)` - Quick status update
+- `DeleteTrade(id int64)` - Delete trade
+- `GetStrategyTypes()` - Get 24 strategy types in 8 categories
+
+### Database Schema
+
+Located in `pkg/database/schema.sql`:
+- `market_ratings` - Overall market sentiment (-3 to +3)
+- `sector_ratings` - Individual sector ratings
+- `options_trades` - Options trading records
+- `strategy_types` - 24 predefined strategies
+
+### Frontend State Management
+
+Svelte stores in `frontend/src/stores/`:
+- `market.js` - Market rating state and API calls
+- `trades.js` - Trade management and filtering
+- `toast.js` - Notification system
 
 ## Critical Development Rules
 
-1. **Progress Tracking**: Update `PROGRESS_LOG.md` after every significant change with format: `[YYYY-MM-DD HH:MM] Feature: Description`
-
-2. **No TypeScript**: Use plain JavaScript with JSDoc comments for documentation
-
-3. **API Format**: All endpoints under `/api/v1/` with RESTful conventions
-
-4. **Error Handling**: Never ignore errors, always provide user-friendly messages
-
-5. **Performance**: Target 60fps animations, sub-second API responses
+1. **No TypeScript** - Use plain JavaScript with JSDoc comments
+2. **Windows Paths** - Use `node_modules\.bin\vite.cmd` in package.json scripts
+3. **Error Handling** - Database operations gracefully fail with default values
+4. **Data Directory** - App tries multiple locations for SQLite database:
+   - Executable directory (portable mode)
+   - %APPDATA%\TradingDashboard (installed mode)
+   - User home directory (fallback)
 
 ## UI Specifications
 
-### Dial Components
-- **Size**: 200x200px (sectors), 300x300px (overall market)
-- **Scale**: -3 to +3 with 0.1 increments
-- **Animation**: 300ms ease-in-out transitions
-- **Colors**: Red (-3) to Yellow (0) to Green (+3) gradient
-- **Theme**: Dark background (#0a0a0a) with subtle lighting effects
+### Market Sentiment Dials
+- Interactive SVG dials with -3 to +3 scale
+- Red-Yellow-Green gradient
+- Mouse wheel, click-drag, and keyboard support
+- 11 sectors + 1 overall market dial
 
-### Grid Layout
-- 8px spacing grid system
-- Responsive with CSS Grid
-- Dark theme with high contrast for trading environment
+### Trade Grid
+- 3-week calendar view with Monday start
+- Color-coded by strategy category
+- Status badges (active, closed, expired, etc.)
+- Right-click context menu for quick actions
 
-## Core Features
+### Modals and Forms
+- TradeModal for create/edit with validation
+- Date pickers, strategy dropdowns, target inputs
+- Real-time validation feedback
 
-1. **Market Sentiment Dials**: 11 sectors + overall market with persistence
-2. **Options Trade Grid**: Manage trades with ticker, strategy, dates, targets
-3. **Strategy Categories**: 24 strategies organized in 8 color-coded categories
-4. **Auto-save**: Every user action persisted to SQLite
+## Building and Distribution
 
-## Windows-Specific Notes
+1. **Development**: Use `wails dev` for hot-reload development
+2. **Production Build**: Run `build.ps1` from project root
+3. **Output Files**:
+   - `trading-dashboard.exe` - Standalone executable (~12MB)
+   - `trading-dashboard-amd64-installer.exe` - NSIS installer (~6MB)
 
-- Use `pnpm` instead of `npm` to avoid node_modules path issues
-- Alternative: Build frontend on WSL2 if needed
-- May need to set Windows max path length
-- Use `npx rimraf node_modules` for cleanup
+## Common Tasks
 
-## Testing Requirements
+### Adding a New API Endpoint
+1. Add method to `app.go` with proper error handling
+2. Method will be auto-exposed to frontend via Wails
+3. Call from frontend using `window.go.main.App.MethodName()`
 
-- Go: Table-driven tests for all services
-- API: Test all endpoints
-- Frontend: Component tests for complex UI logic
-- Target: >70% code coverage for backend services
+### Adding a New Component
+1. Create `.svelte` file in `frontend/src/components/`
+2. Follow existing patterns (see Dial.svelte or TradeCell.svelte)
+3. Use CSS-in-component styling
+
+### Modifying Database Schema
+1. Update `pkg/database/schema.sql`
+2. Update models in `pkg/models/`
+3. Update service methods in `pkg/services/`
+4. Database auto-migrates on startup
+
+## Testing
+
+Currently no automated tests. To test:
+1. Run `wails dev` for development mode
+2. Check browser console for frontend errors
+3. Check terminal for backend errors
+4. Database file is created in data directory
+
+## Progress Tracking
+
+See `PROGRESS_LOG.md` for detailed development history and feature implementation timeline.

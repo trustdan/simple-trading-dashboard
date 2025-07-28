@@ -2,6 +2,7 @@
 	import { createEventDispatcher, onMount } from 'svelte';
 	import { tradesStore } from '../stores/trades.js';
 	import { toastStore } from '../stores/toast.js';
+	import { SECTORS } from '../stores/market.js';
 
 	const dispatch = createEventDispatcher();
 
@@ -14,7 +15,7 @@
 	// Form data
 	let formData = {
 		ticker: '',
-		sector: selectedSector || 'Technology',
+		sector: selectedSector || sectors[0],
 		strategy_type: 'Long Call',
 		entry_date: selectedDate || new Date().toISOString().split('T')[0],
 		expiration_date: '',
@@ -28,12 +29,8 @@
 	let errors = {};
 	let strategyTypes = [];
 
-	// Sector options
-	const sectors = [
-		'Technology', 'Healthcare', 'Financial', 'Consumer Discretionary',
-		'Communication Services', 'Industrials', 'Consumer Staples',
-		'Energy', 'Utilities', 'Real Estate', 'Materials'
-	];
+	// Use sectors from market store for consistency
+	const sectors = SECTORS;
 
 	// Load strategy types and populate form
 	onMount(async () => {

@@ -82,7 +82,7 @@
 		const expirationDate = new Date(trade.expiration_date);
 		const cellDate = new Date(date);
 		const diffDays = Math.ceil((expirationDate - cellDate) / (1000 * 60 * 60 * 24));
-		return diffDays <= 7 && diffDays >= 0; // Expiring within a week
+		return diffDays <= 3 && diffDays >= 0; // Expiring within 3 days
 	}
 
 	function isTradeStarting(trade) {
@@ -409,8 +409,9 @@
 	}
 
 	.trade-item.expiring {
-		animation: blinkExpiring 2s infinite;
+		animation: blinkExpiring 3s infinite;
 		border-width: 2px;
+		border-style: dashed;
 	}
 
 	.trade-item.starting {
@@ -420,7 +421,7 @@
 
 	@keyframes blinkExpiring {
 		0%, 50% { opacity: 1; }
-		51%, 100% { opacity: 0.6; }
+		51%, 100% { opacity: 0.85; }
 	}
 
 	.trade-ticker {

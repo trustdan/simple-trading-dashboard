@@ -65,13 +65,31 @@
 		const x = event.clientX - centerX;
 		const y = event.clientY - centerY;
 		
-		// Calculate angle (-180 to +180)
+		// Calculate angle from center point (-180 to +180)
 		let angle = Math.atan2(y, x) * (180 / Math.PI);
 		
-		// Adjust angle to our coordinate system (-135 to +135)
-		angle = angle - 90; // Rotate so top is 0°
+		// Adjust angle: convert so that top is 0° and normalize to our dial's range
+		angle = angle + 90; // Rotate so top is 0°
 		
-		// Clamp to our range
+		// Normalize angle to 0-360 range
+		if (angle < 0) angle += 360;
+		
+		// Our dial goes from -135° (value -3) to +135° (value +3)
+		// Map the full circle to this range
+		if (angle >= 0 && angle <= 135) {
+			// Right side of dial (0 to +3)
+			angle = angle;
+		} else if (angle >= 225 && angle <= 360) {
+			// Left side of dial (-3 to 0)
+			angle = angle - 360;
+		} else {
+			// Bottom half - clamp to nearest edge
+			if (angle > 135 && angle < 225) {
+				angle = (angle - 135 < 90) ? 135 : -135;
+			}
+		}
+		
+		// Clamp to our valid range
 		if (angle > 135) angle = 135;
 		if (angle < -135) angle = -135;
 		
@@ -146,9 +164,11 @@
 			cx={size / 2}
 			cy={size / 2}
 			r={size / 2 - 40}
-			fill="none"
+			fill="transparent"
 			stroke="#333"
 			stroke-width="4"
+			class="background-circle"
+			on:click={handleMouseDown}
 		/>
 
 		<!-- Position markers for each valid value -->
@@ -277,5 +297,13 @@
 	.center-value {
 		font-family: system-ui, -apple-system, sans-serif;
 		pointer-events: none;
+	}
+
+	.background-circle {
+		cursor: grab;
+	}
+
+	.background-circle:active {
+		cursor: grabbing;
 	}
 </style> 

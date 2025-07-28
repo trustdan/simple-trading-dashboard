@@ -1,6 +1,7 @@
 <script>
 	import { createEventDispatcher } from 'svelte';
 	import { tradesStore } from '../stores/trades.js';
+	import { SECTORS } from '../stores/market.js';
 
 	const dispatch = createEventDispatcher();
 
@@ -18,11 +19,8 @@
 	// Get strategy types from store
 	$: strategyTypes = $tradesStore.strategyTypes || [];
 
-	const sectors = [
-		'Technology', 'Healthcare', 'Financial', 'Consumer Discretionary',
-		'Communication Services', 'Industrials', 'Consumer Staples',
-		'Energy', 'Utilities', 'Real Estate', 'Materials'
-	];
+	// Use sectors from market store for consistency
+	const sectors = SECTORS;
 
 	const statusOptions = [
 		{ value: 'all', label: 'All Status' },
