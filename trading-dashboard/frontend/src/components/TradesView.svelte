@@ -10,7 +10,7 @@
 	import { toastStore } from '../stores/toast.js';
 
 	let loading = false;
-	let currentWeekStart = new Date();
+	let currentCenterDate = new Date(); // Changed from currentWeekStart to currentCenterDate
 	
 	// Modal state
 	let isModalOpen = false;
@@ -59,13 +59,10 @@
 		}
 	}
 
-	// Set the current week to start on Monday
+	// Set the current center date to today
 	onMount(() => {
 		const today = new Date();
-		const dayOfWeek = today.getDay();
-		const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Sunday = 0, Monday = 1
-		currentWeekStart = new Date(today);
-		currentWeekStart.setDate(today.getDate() + mondayOffset);
+		currentCenterDate = new Date(today); // Start centered on today
 		
 		generateDateColumns();
 		loadTrades();
@@ -73,10 +70,13 @@
 
 	function generateDateColumns() {
 		const columns = [];
-		const startDate = new Date(currentWeekStart);
+		const centerDate = new Date(currentCenterDate);
 		
-		// Generate 21 days (3 weeks)
-		for (let i = 0; i < 21; i++) {
+		// Generate 42 days total: 14 days back + today + 27 days forward (6 weeks total)
+		const startDate = new Date(centerDate);
+		startDate.setDate(centerDate.getDate() - 14); // 2 weeks back
+		
+		for (let i = 0; i < 42; i++) {
 			const date = new Date(startDate);
 			date.setDate(startDate.getDate() + i);
 			columns.push(date);
@@ -88,9 +88,11 @@
 	async function loadTrades() {
 		loading = true;
 		try {
-			const startDate = new Date(currentWeekStart);
-			const endDate = new Date(currentWeekStart);
-			endDate.setDate(startDate.getDate() + 20); // 3 weeks
+			const centerDate = new Date(currentCenterDate);
+			const startDate = new Date(centerDate);
+			startDate.setDate(centerDate.getDate() - 14); // 2 weeks back
+			const endDate = new Date(centerDate);
+			endDate.setDate(centerDate.getDate() + 27); // ~4 weeks forward
 			
 			await tradesStore.loadTradesByDateRange(startDate, endDate);
 			
@@ -120,9 +122,18 @@
 	}
 
 	function navigateWeek(direction) {
-		const newStart = new Date(currentWeekStart);
-		newStart.setDate(currentWeekStart.getDate() + (direction * 7));
-		currentWeekStart = newStart;
+		const newCenter = new Date(currentCenterDate);
+		newCenter.setDate(currentCenterDate.getDate() + (direction * 7));
+		currentCenterDate = newCenter;
+		
+		generateDateColumns();
+		loadTrades();
+	}
+
+	function navigateDay(direction) {
+		const newCenter = new Date(currentCenterDate);
+		newCenter.setDate(currentCenterDate.getDate() + direction);
+		currentCenterDate = newCenter;
 		
 		generateDateColumns();
 		loadTrades();
@@ -130,13 +141,17 @@
 
 	function goToToday() {
 		const today = new Date();
-		const dayOfWeek = today.getDay();
-		const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-		currentWeekStart = new Date(today);
-		currentWeekStart.setDate(today.getDate() + mondayOffset);
-		
+		currentCenterDate = new Date(today);
 		generateDateColumns();
 		loadTrades();
+		
+		// Scroll the current day into view
+		setTimeout(() => {
+			const todayElements = document.querySelectorAll('.date-header.today');
+			if (todayElements.length > 0) {
+				todayElements[0].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+			}
+		}, 100);
 	}
 
 	// Modal handlers
@@ -292,17 +307,25 @@
 		</div>
 		
 		<div class="header-controls">
-			<button class="nav-button" on:click={() => navigateWeek(-1)}>
-				← Previous Week
-			</button>
-			
-			<button class="today-button" on:click={goToToday}>
-				Today
-			</button>
-			
-			<button class="nav-button" on:click={() => navigateWeek(1)}>
-				Next Week →
-			</button>
+			<div class="navigation-group">
+				<button class="nav-button week-nav" on:click={() => navigateWeek(-1)}>
+					← Week
+				</button>
+				<button class="nav-button day-nav" on:click={() => navigateDay(-1)}>
+					← Day
+				</button>
+				
+				<button class="today-button" on:click={goToToday}>
+					Today
+				</button>
+				
+				<button class="nav-button day-nav" on:click={() => navigateDay(1)}>
+					Day →
+				</button>
+				<button class="nav-button week-nav" on:click={() => navigateWeek(1)}>
+					Week →
+				</button>
+			</div>
 			
 			<div class="view-switcher">
 				<button 
@@ -557,6 +580,23 @@
 		border-color: rgba(74, 144, 226, 0.5);
 	}
 
+	.navigation-group {
+		display: flex;
+		gap: 8px;
+		align-items: center;
+	}
+
+	.day-nav {
+		font-size: 0.85rem;
+		padding: 10px 16px;
+		background: rgba(255, 255, 255, 0.08);
+	}
+
+	.week-nav {
+		font-size: 0.9rem;
+		padding: 12px 20px;
+	}
+
 	.today-button {
 		background: linear-gradient(135deg, #4a90e2, #7b68ee);
 		border: none;
@@ -661,7 +701,7 @@
 	}
 
 	.trade-grid {
-		min-width: 1400px;
+		min-width: 2760px; /* 200px + (42 * 80px) = 3560px, but let's be conservative */
 		background: rgba(255, 255, 255, 0.02);
 		border-radius: 12px;
 		overflow: hidden;
@@ -670,7 +710,7 @@
 
 	.grid-header {
 		display: grid;
-		grid-template-columns: 200px repeat(21, 80px);
+		grid-template-columns: 200px repeat(42, 80px);
 		background: rgba(255, 255, 255, 0.05);
 		border-bottom: 2px solid rgba(255, 255, 255, 0.1);
 	}
@@ -729,7 +769,7 @@
 
 	.sector-row {
 		display: grid;
-		grid-template-columns: 200px repeat(21, 80px);
+		grid-template-columns: 200px repeat(42, 80px);
 		border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 	}
 
@@ -803,7 +843,7 @@
 		}
 
 		.trade-grid {
-			min-width: 1200px;
+			min-width: 2400px;
 		}
 	}
 
